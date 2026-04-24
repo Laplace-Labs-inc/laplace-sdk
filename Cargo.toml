@@ -1,0 +1,74 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/shared/laplace-interfaces",
+    "crates/shared/laplace-core",
+    "crates/shared/laplace-rpc",
+    "crates/kraken/laplace-kraken",
+    "crates/probe/laplace-probe",
+    "crates/probe/laplace-probe-common",
+    "crates/probe/laplace-probe-adapter",
+    "crates/probe/laplace-probe-sdk",
+    #"crates/probe/laplace-mesh-cli",
+    "crates/console/laplace-cli",
+    "crates/console/laplace-console",
+    "crates/console/laplace-scribe",
+    "crates/console/laplace-embedder",
+    "crates/console/laplace-api",
+    "crates/axiom/laplace-dpor",
+    "crates/axiom/laplace-axiom",
+    "crates/verification/laplace-harness",
+    "crates/verification/laplace-macro",
+    "crates/sdk/laplace-sdk",
+    # "examples/integration-test",
+    # "examples/byoc-demo",
+    # "examples/ebpf-lock-test",
+]
+
+[workspace.package]
+version = "0.8.0-beta-1"
+edition = "2021"
+authors = ["Laplace Labs"]
+license = "Apache-2.0"
+repository = "https://github.com/laplace-labs-inc/laplace-sdk"
+
+[workspace.dependencies]
+# Async Runtime
+tokio = { version = "1.42", features = ["full"] }
+
+# Error Handling
+anyhow = "1.0"
+thiserror = "2.0"
+
+# Serialization
+serde = { version = "1.0.210", features = ["derive"] }
+serde_json = "1.0"
+prost = "0.13"
+
+async-trait = "0.1.89"
+
+# Networking
+hyper = { version = "1.5", features = ["full"] }
+hyper-util = { version = "0.1", features = ["full"] }
+http-body-util = "0.1"
+quinn = "0.11"
+
+# FFI & Memory
+sled = "0.34"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = "0.3"
+
+[profile.release]
+strip = true
+opt-level = "z"
+
+[profile.dev]
+debug = 0
+incremental = true
+split-debuginfo = "unpacked"
+
+[profile.dev.package."*"]
+debug = 0
+

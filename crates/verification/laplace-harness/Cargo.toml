@@ -1,0 +1,35 @@
+[package]
+name = "laplace-harness"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Laplace Harness Registry: centralised verification scenarios for Axiom Oracle"
+
+[lib]
+name = "laplace_harness"
+path = "src/lib.rs"
+
+[dependencies]
+laplace-core = { path = "../../shared/laplace-core" }
+laplace-axiom = { path = "../../axiom/laplace-axiom", optional = true }
+laplace-macro = { path = "../laplace-macro", optional = true }
+inventory = { version = "0.3", optional = true }
+anyhow = "1.0"
+deadpool = { version = "0.10", optional = true }
+laplace-deadpool-audit = { path = "../../external/deadpool", optional = true }
+
+[features]
+default = ["twin"]
+twin = ["laplace-core/twin"]
+verification = [
+    "dep:laplace-axiom",
+    "dep:laplace-macro",
+    "dep:inventory",
+    "dep:deadpool",
+    "dep:laplace-deadpool-audit",
+    "laplace-core/verification",
+    "laplace-axiom/twin",
+    "laplace-axiom/verification",
+]
+internal-audit = []

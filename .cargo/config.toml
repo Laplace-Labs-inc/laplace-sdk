@@ -1,0 +1,13 @@
+[env]
+# Path to the packages directory relative to workspace root.
+LAPLACE_TS_ROOT = { value = "packages", relative = true }
+
+# [target.x86_64-unknown-linux-gnu]
+# linker = "clang"
+# rustflags = [
+#     "-C", "link-arg=-fuse-ld=mold",
+#     # codegen-backend path (fill in toolchain-specific path locally)
+# ]
+
+[build]
+incremental = true

@@ -1,0 +1,117 @@
+# ╔══════════════════════════════════════════════════════════════════════════╗
+# ║              Laplace Framework — Global Configuration                   ║
+# ║                                                                          ║
+# ║  This file is the single source of truth for the entire Laplace stack.  ║
+# ║  It is loaded by `laplace run --config <FILE>` and hot-reloaded by      ║
+# ║  `laplace apply -f <FILE>` without restarting the daemon.               ║
+# ║                                                                          ║
+# ║  Override priority (highest wins):                                       ║
+# ║    1. Built-in defaults  (LaplaceGlobalConfig::default())                ║
+# ║    2. This TOML file                                                     ║
+# ║    3. Environment variables  LAPLACE_<SECTION>__<FIELD>=<VALUE>          ║
+# ║       e.g.  LAPLACE_AXIOM__MAX_THREADS=4                                 ║
+# ║    4. Future: explicit CLI flags                                          ║
+# ╚══════════════════════════════════════════════════════════════════════════╝
+
+# ─────────────────────────────────────────────────────────────────────────────
+# [axiom]  Deterministic verification engine (DPOR / Ki-DPOR Oracle)
+# ─────────────────────────────────────────────────────────────────────────────
+[axiom]
+
+# Maximum number of concurrent threads that the DPOR scheduler will track.
+# Must be ≤ 64 (TinyBitSet physical limit).
+# Larger values increase verification coverage but grow memory usage O(n²).
+max_threads = 8
+
+# Maximum exploration depth / step budget for Classic-DPOR and Ki-DPOR paths.
+# Lowering this speeds up short-circuit verification; raising it finds deeper bugs.
+max_depth = 20
+
+# Maximum steps a thread is allowed to wait before Ki-DPOR flags a
+# liveness violation (starvation detection).
+max_starvation_limit = 10
+
+# Upper bound on the heuristic danger score used by the A*-Ki prioritiser.
+# Increasing this accommodates heavier fairness penalty terms.
+max_danger = 2000
+
+# Master RNG seed for the Axiom Oracle.
+# This value is embedded in every `.ard` forensic report header so that
+# any verification run can be deterministically replayed.
+# Must be non-zero for meaningful randomisation.
+default_seed = 0xA1100ACE5EED0001
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# [kraken]  Load-simulation & network emulation engine
+# ─────────────────────────────────────────────────────────────────────────────
+[kraken]
+
+# Maximum byte length of a single agent response frame read from the mesh.
+# Frames larger than this are truncated and a warning is logged.
+# Default: 4 096 (4 KiB) — sufficient for typical semantic mesh responses.
+max_response_bytes = 4096
+
+# Cooperative-scheduling yield interval.
+# The VU main loop yields to the Tokio executor every N iterations.
+# Lower values improve fairness under heavy load; higher values improve throughput.
+yield_interval_iterations = 256
+
+# Hard cap on VU main-loop iterations.
+# Prevents runaway scenarios from looping forever regardless of scenario structure.
+# Default: 5 000 000  (~24 h at 256 iterations/ms).
+max_safety_iterations = 5000000
+
+# Divisor applied to raw RNG output to produce a float probability value.
+# 1 000 000 → 6 decimal places of precision (e.g. 0.050000 = 5.0%).
+rng_scale = 1000000
+
+# Baseline latency injected into every virtual network request (milliseconds).
+# Models the propagation delay of the target network segment.
+# Reference presets: RELIABLE=10  MOBILE_4G=80  SATELLITE=300
+network_base_latency_ms = 10
+
+# Peak-to-peak jitter added on top of the baseline latency (milliseconds).
+# Uniformly sampled in [-jitter/2, +jitter/2] per request.
+# Reference presets: RELIABLE=2  MOBILE_4G=50  SATELLITE=100
+network_jitter_ms = 2
+
+# Simulated packet-error rate in parts-per-million.
+# 0       = no errors  (RELIABLE preset)
+# 50 000  = 5.0%       (MOBILE_4G preset)
+# 100 000 = 10.0%      (SATELLITE preset)
+network_error_probability_ppm = 0
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# [probe]  QUIC mesh sidecar & Laplace-LZ wire codec
+# ─────────────────────────────────────────────────────────────────────────────
+[probe]
+
+# Maximum total inbound frame size accepted over a QUIC stream (bytes).
+# Frames exceeding this are rejected with MeshError::FrameTooLarge.
+# Default: 4 194 304 (4 MiB).
+max_frame_len = 4194304
+
+# Number of outbound messages accumulated per peer before forcing a flush.
+# Higher values improve throughput; lower values reduce tail latency.
+batch_size = 64
+
+# Maximum idle duration before forcing a batch flush (milliseconds).
+# Acts as a safety valve when the batch_size threshold is never reached.
+flush_interval_ms = 100
+
+# Payload size threshold above which Layer-3 LZ4 byte compression is applied.
+# Payloads ≤ this value are sent uncompressed (compression overhead not worth it).
+# Default: 4 096 (4 KiB) — matches the Layer-1/2 static + dynamic dict sweet spot.
+lz4_compression_threshold = 4096
+
+# Minimum observation count before a repeated token is promoted to the
+# per-session dynamic dictionary (Layer 2).
+# Lower values promote aggressively (saves bytes sooner, more sync messages).
+# Higher values are conservative (fewer promotions, less overhead on short sessions).
+promotion_threshold = 16
+
+# UDP port the Probe sidecar binds on for QUIC connections.
+# Must be > 1024 when running without elevated privileges.
+bind_port = 9000

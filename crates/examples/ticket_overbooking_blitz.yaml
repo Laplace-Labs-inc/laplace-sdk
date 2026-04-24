@@ -1,0 +1,23 @@
+# Laplace Kraken — 티켓 초과 예매(Overbooking) Race Condition 부하 시나리오
+#
+# 목표: 100명의 가상 사용자(VU)가 동시에 /book_ticket을 반복 요청하여
+#       demo-server의 Read-Modify-Write 경쟁 조건을 100% 재현한다.
+#
+# 동시성: 100 VU (KrakenController.spawn_users(100) 기본값)
+# 총 요청 수: 100 VU × 10 loop = 1,000 요청
+
+name: ticket_overbooking_blitz
+steps:
+  # [0] POST /book_ticket — 티켓 예매 요청
+  - type: Request
+    method: Post
+    path: /book_ticket
+    body: '{"vu_id":"{{vu_id}}"}'
+
+  # [1] Loop: 각 VU가 위 Request를 10회 반복 (jump_back_idx: 0 → step[0]으로 복귀)
+  - type: Loop
+    iterations: 10
+    jump_back_idx: 0
+
+  # [2] 모든 반복 종료 후 VU 정상 종료
+  - type: Finish

@@ -1,0 +1,27 @@
+# Laplace Kraken — AB-BA Deadlock Demo Scenario
+#
+# Target: demo-server /deadlock endpoint
+#
+# Each VU sends concurrent POST /deadlock requests. The 50ms sleep inside the
+# handler guarantees that two in-flight requests will each hold one lock and
+# block on the other, creating the classic circular-wait pattern that the
+# Axiom DPOR engine detects as a Deadlock violation.
+#
+# Concurrency: 10 VUs (enough to guarantee multiple AB-BA pairs)
+# Total requests: 10 VU × 3 loop = 30 requests
+
+name: ab_ba_deadlock_demo
+steps:
+  # [0] POST /deadlock — trigger AB-BA lock acquisition with random order
+  - type: Request
+    method: Post
+    path: /deadlock
+    body: '{"vu_id":"{{vu_id}}"}'
+
+  # [1] Loop: each VU repeats 3 times (enough to guarantee concurrent collisions)
+  - type: Loop
+    iterations: 3
+    jump_back_idx: 0
+
+  # [2] All iterations done
+  - type: Finish

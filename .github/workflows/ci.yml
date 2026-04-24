@@ -1,0 +1,212 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+      - claude_ai
+  pull_request:
+    branches:
+      - main
+      - dev
+      - claude_ai
+  # 💡 마법의 옵션: GitHub 웹에서 수동으로 'Run workflow' 버튼을 누를 수 있게 해줍니다.
+  workflow_dispatch: 
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  setup-and-check:
+    name: Check & Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      # 💡 빌드 시간 1/10 단축 캐시
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "."
+      - uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - run: cargo check --all-targets
+      - run: cargo fmt --all -- --check
+
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: setup-and-check
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "."
+      - uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - run: cargo test --all-features
+
+  axiom-verification:
+    name: Axiom Oracle Exhaustive Verification
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: setup-and-check
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "."
+      - uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install Laplace CLI
+        run: cargo install --path crates/console/laplace-cli --features twin,verification
+      - name: Run Axiom Oracle Exhaustive Verification
+        run: laplace verify --harness all --strict
+
+  # ===================================================================
+  # 🚨 무거운 작업들 (Heavy Duty) - 평소에는 스킵됨!
+  # ===================================================================
+  kani-proof:
+    name: Kani Mathematical Proof
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    needs: setup-and-check
+    # 💡 핵심 조건: '수동 실행'이거나 'main 브랜치 PR'일 때만 동작!
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.base_ref == 'main')
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "."
+      - uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: model-checking/kani-github-action@v1
+        with:
+          args: "-p laplace-core --features twin"
+        continue-on-error: true
+
+  benchmark:
+    name: Performance Benchmark
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    needs: test
+    # 💡 핵심 조건: Kani와 동일하게 평소에는 스킵됨!
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.base_ref == 'main')
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "."
+      - uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - run: chmod +x scripts/run_bench.sh
+      - run: ./scripts/run_bench.sh
+        continue-on-error: true
+
+  update-performance-report:
+    name: Update Performance Badge (Kraken CPI)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: axiom-verification
+    # Only runs on direct pushes to main
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "."
+      - uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Run benchmarks and extract CPI
+        run: |
+          chmod +x scripts/run_bench.sh
+          ./scripts/run_bench.sh || true
+        continue-on-error: true
+      - name: Update README badge
+        run: |
+          if [ -f bench_cpi.env ]; then
+            source bench_cpi.env
+          else
+            CPI_SCORE="N/A"
+          fi
+          python3 scripts/update_badge.py --cpi "${CPI_SCORE}" --readme README.md
+      - name: Commit badge update
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add README.md
+          if ! git diff --cached --quiet; then
+            git commit -m "docs: update performance badge with latest Kraken CPI [skip ci]"
+            git push
+          else
+            echo "No badge changes to commit."
+          fi
+
+  mirror-deploy:
+    name: Sanitized Mirror Deployment
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: update-performance-report
+    # Only on push to main (including merged PRs)
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "."
+      - uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Configure Git credentials for mirror push
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global url."https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf "https://github.com/"
+      - name: Install Laplace CLI
+        run: cargo install --path crates/console/laplace-cli --features twin,verification
+      - name: Mirror → laplace-sdk
+        id: mirror_sdk
+        run: |
+          laplace gate push --target sdk
+          echo "sdk_status=success" >> "$GITHUB_OUTPUT"
+      - name: Mirror → laplace-engine
+        id: mirror_engine
+        run: |
+          laplace gate push --target engine
+          echo "engine_status=success" >> "$GITHUB_OUTPUT"
+      - name: Report deployment success
+        run: |
+          SDK_URL="https://github.com/${{ github.repository_owner }}/laplace-sdk"
+          ENGINE_URL="https://github.com/${{ github.repository_owner }}/laplace-engine"
+          echo "=========================================="
+          echo "  Mirror Deployment Success"
+          echo "=========================================="
+          echo "  ✅ SDK target    → ${SDK_URL}"
+          echo "  ✅ Engine target → ${ENGINE_URL}"
+          echo "  Commit SHA : ${{ github.sha }}"
+          echo "  Triggered by: ${{ github.actor }}"
+          echo "=========================================="

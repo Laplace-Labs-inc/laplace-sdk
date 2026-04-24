@@ -1,0 +1,36 @@
+# Rust
+target/
+Cargo.lock
+**/*.rs.bk
+*.pdb
+
+# Laplace specific
+.laplace/
+
+# TLA+ TLC 생성 파일들
+*_TTrace_*.tla
+*.bin
+*.out
+states/
+MC.out
+MC.cfg
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# LKS
+LKS
+error.md
+
+# Session P — tokio 벤더링 폐기 사체 (9.7MB, Phase 2 eBPF 전환으로 무효화됨)
+vendor/tokio-patched/
